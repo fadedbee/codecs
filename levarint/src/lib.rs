@@ -1,6 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 
-use core::mem::size_of;
+use core::{mem::size_of, convert::TryInto};
 
 /// Calculate the offsets.
 const OFFSET0: u64 = 0;
@@ -73,51 +73,41 @@ pub fn decode(buf: &[u8; 9]) -> (u64, usize) {
     }
 }
 
-fn u64_to_slice<const NUM_BYTES: usize>(value: u64, slice: &mut [u8]) {
-    // TODO: We only need to write NUM_BYTES, not all of them.
-    unsafe {
-        *slice.get_unchecked_mut(0) = value as u8;
-        *slice.get_unchecked_mut(1) = (value << 8) as u8;
-        *slice.get_unchecked_mut(2) = (value << 16) as u8;
-        *slice.get_unchecked_mut(3) = (value << 24) as u8;
-        *slice.get_unchecked_mut(4) = (value << 32) as u8;
-        *slice.get_unchecked_mut(5) = (value << 40) as u8;
-        *slice.get_unchecked_mut(6) = (value << 48) as u8;
-        *slice.get_unchecked_mut(7) = (value << 56) as u8;
-    }
-}
+fn inner_encode<const NUM_BYTES: usize>(mut value: u64, bytes: &mut [u8; 8]) -> usize {
+    #[cfg(test)] eprintln!("A value: {value}");
 
-fn inner_encode<const NUM_BYTES: usize>(mut value: u64, slice: &mut [u8]) -> usize {
     value -= OFFSETS[NUM_BYTES - 1];
     value <<= 1;
     value += 1;
-    value <<= NUM_BYTES - 1;
-    u64_to_slice::<NUM_BYTES>(value, slice);
+    value <<= (NUM_BYTES - 1);
+    #[cfg(test)] eprintln!("B value: {value}");
+    *bytes = u64::to_le_bytes(value);
+    #[cfg(test)] eprintln!("bytes: {bytes:?}");
     NUM_BYTES
 }
 
 /// Encodes a u64 into 1-9 bytes and returns the number of bytes updated.
 pub fn encode(value: u64, buf: &mut [u8; 9]) -> usize {
+    let low64: &mut [u8; size_of::<u64>()] = (&mut buf[..(size_of::<u64>())]).try_into().unwrap();
+
+    // Waiting for answer to: https://stackoverflow.com/questions/75496635/how-to-get-a-workling-mutable-reference-to-a-subset-of-an-array
     match value {
         // FIXME: Change to exclusive ranges once the feature's stabilised.
-        OFFSET0..=OFFSET1_LESS_ONE => inner_encode::<1>(value, &mut buf[0..1]),
-        OFFSET1..=OFFSET2_LESS_ONE => inner_encode::<2>(value, &mut buf[0..2]),
-        OFFSET2..=OFFSET3_LESS_ONE => inner_encode::<3>(value, &mut buf[0..3]),
-        OFFSET3..=OFFSET4_LESS_ONE => inner_encode::<4>(value, &mut buf[0..4]),
-        OFFSET4..=OFFSET5_LESS_ONE => inner_encode::<4>(value, &mut buf[0..5]),
-        OFFSET5..=OFFSET6_LESS_ONE => inner_encode::<5>(value, &mut buf[0..6]),
-        OFFSET6..=OFFSET7_LESS_ONE => inner_encode::<6>(value, &mut buf[0..7]),
-        OFFSET7..=OFFSET8_LESS_ONE => inner_encode::<8>(value, &mut buf[0..8]),
+        OFFSET0..=OFFSET1_LESS_ONE => inner_encode::<1>(value, low64),
+        OFFSET1..=OFFSET2_LESS_ONE => inner_encode::<2>(value, low64),
+        OFFSET2..=OFFSET3_LESS_ONE => inner_encode::<3>(value, low64),
+        OFFSET3..=OFFSET4_LESS_ONE => inner_encode::<4>(value, low64),
+        OFFSET4..=OFFSET5_LESS_ONE => inner_encode::<5>(value, low64),
+        OFFSET5..=OFFSET6_LESS_ONE => inner_encode::<6>(value, low64),
+        OFFSET6..=OFFSET7_LESS_ONE => inner_encode::<7>(value, low64),
+        OFFSET7..=OFFSET8_LESS_ONE => inner_encode::<8>(value, low64),
         _ => { // All nine bytes are needed.
-            buf[0] = 0;
-            buf[1] = value as u8;
-            buf[2] = (value << 8) as u8;
-            buf[3] = (value << 16) as u8;
-            buf[4] = (value << 24) as u8;
-            buf[5] = (value << 32) as u8;
-            buf[6] = (value << 40) as u8;
-            buf[7] = (value << 48) as u8;
-            buf[8] = (value << 56) as u8;
+            *low64 = [0; size_of::<u64>()];
+            drop(low64);
+
+            let high64: &mut [u8; size_of::<u64>()] = &mut buf[0..(size_of::<u64>())].try_into().unwrap();
+            *high64 = u64::to_le_bytes(value);
+
             9
         }
     }
@@ -212,7 +202,20 @@ mod tests {
     fn test_encoding() {
         let mut buf = [0u8; 9];
 
+        assert_eq!(OFFSET0, 0);
         assert_eq!(encode(0, &mut buf), 1);
         assert_eq!(buf, [0b00000001u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(encode(1, &mut buf), 1);
+        assert_eq!(buf, [0b00000011u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(encode(127, &mut buf), 1);
+        assert_eq!(buf, [0b11111111u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+        assert_eq!(OFFSET1, 128);
+        assert_eq!(encode(128, &mut buf), 2);
+        assert_eq!(buf, [0b00000010u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(encode(129, &mut buf), 2);
+        assert_eq!(buf, [0b00000110u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(encode(16_511, &mut buf), 2);
+        assert_eq!(buf, [0b11111110u8, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
