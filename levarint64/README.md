@@ -49,6 +49,14 @@ Notes:
     - just stored the eight-byte value verbatim in the high eight bytes.
   - A LeVarInt128 would be more complex.
 
+API:
+- For the first release of the crate, only the very low-level encode_to_array_ref() are provided.
+  - These are most efficient, as bounds checks are optimised away.
+  - They are unfriendly.
+  - What is a better API?
+    - [u8] slices?
+    - Iterators?
+
 Thanks:
 - To Masklinn and Chayim Friedman for helping me with https://stackoverflow.com/questions/75370230
 - To PitaJ for answering https://stackoverflow.com/questions/75496635

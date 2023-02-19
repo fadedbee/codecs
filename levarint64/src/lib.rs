@@ -30,11 +30,9 @@ const RIGHTS: [u32; 8] = [57, 50, 43, 36, 29, 22, 15, 8];
 
 fn inner_decode<const NUM_BYTES: u32>(mut value: u64) -> u64 {
     let left_shift = LEFTS[(NUM_BYTES - 1) as usize];
-    //eprintln!("left_shift: {left_shift}");
     value <<= left_shift;
 
     let right_shift = RIGHTS[(NUM_BYTES - 1) as usize];
-    //eprintln!("right_shift: {right_shift}");
     value >>= right_shift;
 
     value + OFFSETS[(NUM_BYTES - 1) as usize]
@@ -51,9 +49,8 @@ fn u64_from_high_eight(buf: &[u8; 9]) -> u64 {
 }
 
 /// Decodes 1-9 bytes and returns a u64 and the number of bytes consumed.
-pub fn decode(buf: &[u8; 9]) -> (u64, usize) {
+pub fn decode_from_array_ref(buf: &[u8; 9]) -> (u64, usize) {
     let low64 = u64_from_low_eight(buf);
-    //eprintln!("low64: {low64}");
     let trailing_zeros = low64.trailing_zeros();
 
     match trailing_zeros {
@@ -67,30 +64,24 @@ pub fn decode(buf: &[u8; 9]) -> (u64, usize) {
         7 => (inner_decode::<8>(low64), 8),
         _ => {
             let high64 = u64_from_high_eight(buf);
-            //eprintln!("high64: {high64}");
             (high64, 9) // All nine bytes were used.
         }
     }
 }
 
 fn inner_encode<const NUM_BYTES: usize>(mut value: u64, bytes: &mut [u8; 8]) -> usize {
-    #[cfg(test)] eprintln!("A value: {value}");
-
     value -= OFFSETS[NUM_BYTES - 1];
     value <<= 1;
     value += 1;
     value <<= (NUM_BYTES - 1);
-    #[cfg(test)] eprintln!("B value: {value}");
     *bytes = u64::to_le_bytes(value);
-    #[cfg(test)] eprintln!("bytes: {bytes:?}");
     NUM_BYTES
 }
 
 /// Encodes a u64 into 1-9 bytes and returns the number of bytes updated.
-pub fn encode(value: u64, buf: &mut [u8; 9]) -> usize {
+pub fn encode_to_array_ref(value: u64, buf: &mut [u8; 9]) -> usize {
     let low64: &mut [u8; size_of::<u64>()] = (&mut buf[..(size_of::<u64>())]).try_into().unwrap();
 
-    // Waiting for answer to: https://stackoverflow.com/questions/75496635/how-to-get-a-workling-mutable-reference-to-a-subset-of-an-array
     match value {
         // FIXME: Change to exclusive ranges once the feature's stabilised.
         OFFSET0..=OFFSET1_LESS_ONE => inner_encode::<1>(value, low64),
@@ -108,14 +99,10 @@ pub fn encode(value: u64, buf: &mut [u8; 9]) -> usize {
             let high64: &mut [u8; size_of::<u64>()] = (&mut buf[1..(size_of::<u64>()+1)]).try_into().unwrap();
             *high64 = u64::to_le_bytes(value);
             
-            #[cfg(test)] eprintln!("9 value: {value}");
-            #[cfg(test)] eprintln!("9 high64: {high64:?}");
-
             9
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -132,35 +119,35 @@ mod tests {
     #[test]
     fn test_decoding() {
         assert_eq!(OFFSET0, 0);
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000001u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (0, 1)); // OFFSET0
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000011u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (1, 1)); // OFFSET0 + 1
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b11111111u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (127, 1)); // OFFSET1 - 1
 
         assert_eq!(OFFSET1, 128);
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000010u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (128, 2)); // OFFSET1
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000110u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (129, 2)); // OFFSET1 + 1
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b11111110u8, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (16_511, 2)); // OFFSET2 - 1
 
         assert_eq!(OFFSET2, 16_512);
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000100u8, 0x00, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (16_512, 3)); // OFFSET2
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00001100u8, 0x00, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (16_513, 3)); // OFFSET2 + 1
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b11111100u8, 0xFF, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (OFFSET3 - 1, 3));
 
@@ -168,35 +155,35 @@ mod tests {
         assert_eq!(OFFSET4, 270_549_120);
         assert_eq!(OFFSET5, 34_630_287_488);
         assert_eq!(OFFSET6, 4_432_676_798_592);
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b01000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00, 0x00
         ]), (OFFSET6, 7));
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b11000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00, 0x00
         ]), (OFFSET6 + 1, 7));
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b11000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, /* ignored */ 0x00, 0x00
         ]), (OFFSET7 - 1, 7));
 
         assert_eq!(OFFSET7, 567_382_630_219_904);
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b10000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00
         ]), (OFFSET7, 8));
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b10000000u8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00
         ]), (OFFSET7 + 1, 8));
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b10000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, /* ignored */ 0x00
         ]), (OFFSET8 - 1, 8));
 
         assert_eq!(OFFSET8, 72_624_976_668_147_840);
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (0, 9)); // supernormal encoding of zero in nine bytes
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000000u8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         ]), (1, 9)); // supernormal encoding of one in nine bytes
-        assert_eq!(decode(&[
+        assert_eq!(decode_from_array_ref(&[
             0b00000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
         ]), (u64::MAX, 9));
     }
@@ -206,54 +193,54 @@ mod tests {
         let mut buf = [0u8; 9];
 
         assert_eq!(OFFSET0, 0);
-        assert_eq!(encode(0, &mut buf), 1);
+        assert_eq!(encode_to_array_ref(0, &mut buf), 1);
         assert_eq!(buf, [0b00000001u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode(1, &mut buf), 1);
+        assert_eq!(encode_to_array_ref(1, &mut buf), 1);
         assert_eq!(buf, [0b00000011u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode(127, &mut buf), 1);
+        assert_eq!(encode_to_array_ref(127, &mut buf), 1);
         assert_eq!(buf, [0b11111111u8, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
         assert_eq!(OFFSET1, 128);
-        assert_eq!(encode(128, &mut buf), 2);
+        assert_eq!(encode_to_array_ref(128, &mut buf), 2);
         assert_eq!(buf, [0b00000010u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode(129, &mut buf), 2);
+        assert_eq!(encode_to_array_ref(129, &mut buf), 2);
         assert_eq!(buf, [0b00000110u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode(16_511, &mut buf), 2);
+        assert_eq!(encode_to_array_ref(16_511, &mut buf), 2);
         assert_eq!(buf, [0b11111110u8, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
         assert_eq!(OFFSET2, 16_512);
-        assert_eq!(encode(16_512, &mut buf), 3);
+        assert_eq!(encode_to_array_ref(16_512, &mut buf), 3);
         assert_eq!(buf, [0b00000100u8, 0x00, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode(16_513, &mut buf), 3);
+        assert_eq!(encode_to_array_ref(16_513, &mut buf), 3);
         assert_eq!(buf, [0b00001100u8, 0x00, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode(OFFSET3 - 1, &mut buf), 3);
+        assert_eq!(encode_to_array_ref(OFFSET3 - 1, &mut buf), 3);
         assert_eq!(buf, [0b11111100u8, 0xFF, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
         assert_eq!(OFFSET3, 2_113_664);
         assert_eq!(OFFSET4, 270_549_120);
         assert_eq!(OFFSET5, 34_630_287_488);
         assert_eq!(OFFSET6, 4_432_676_798_592);
-        assert_eq!(encode(OFFSET6, &mut buf), 7);
+        assert_eq!(encode_to_array_ref(OFFSET6, &mut buf), 7);
         assert_eq!(buf, [0b01000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00, 0x00]);
-        assert_eq!(encode(OFFSET6 + 1, &mut buf), 7);
+        assert_eq!(encode_to_array_ref(OFFSET6 + 1, &mut buf), 7);
         assert_eq!(buf, [0b11000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00, 0x00]);
-        assert_eq!(encode(OFFSET7 - 1, &mut buf), 7);
+        assert_eq!(encode_to_array_ref(OFFSET7 - 1, &mut buf), 7);
         assert_eq!(buf, [0b11000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, /* ignored */ 0x00, 0x00]);
 
         assert_eq!(OFFSET7, 567_382_630_219_904);
-        assert_eq!(encode(OFFSET7, &mut buf), 8);
+        assert_eq!(encode_to_array_ref(OFFSET7, &mut buf), 8);
         assert_eq!(buf, [0b10000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00]);
-        assert_eq!(encode(OFFSET7 + 1, &mut buf), 8);
+        assert_eq!(encode_to_array_ref(OFFSET7 + 1, &mut buf), 8);
         assert_eq!(buf, [0b10000000u8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00]);
-        assert_eq!(encode(OFFSET8 - 1, &mut buf), 8);
+        assert_eq!(encode_to_array_ref(OFFSET8 - 1, &mut buf), 8);
         assert_eq!(buf, [0b10000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, /* ignored */ 0x00]);
 
         assert_eq!(OFFSET8, 72_624_976_668_147_840);
-        assert_eq!(encode(OFFSET8, &mut buf), 9);
+        assert_eq!(encode_to_array_ref(OFFSET8, &mut buf), 9);
         assert_eq!(buf, [0b00000000u8, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]);
-        assert_eq!(encode(OFFSET8 + 1, &mut buf), 9);
+        assert_eq!(encode_to_array_ref(OFFSET8 + 1, &mut buf), 9);
         assert_eq!(buf, [0b00000000u8, 0x81, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]);
-        assert_eq!(encode(u64::MAX, &mut buf), 9);
+        assert_eq!(encode_to_array_ref(u64::MAX, &mut buf), 9);
         assert_eq!(buf, [0b00000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
     }
 }
