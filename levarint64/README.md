@@ -6,26 +6,29 @@ Typically this is used to serialise a "count" field, when the number of followin
 The count will most often take just one or two bytes to serialise, but u64::MAX will take nine bytes.
 
 The encoded format is designed for efficient encoding and decoding on little-endian architectures:
+
+```
+                   Encoding                                 Values
+    
+b[8] b[7] b[6] b[5] b[4] b[3] b[2] b[1]    b[0]  
+    
+                                        0b???????1           0 - 127
+                                   0x?? 0b??????10         128 - 16,511
+                              0x?? 0x?? 0b?????100      16,512 - 2,113,663
+                         0x?? 0x?? 0x?? 0b????1000   2,113,663 - 270,549,119
+                    0x?? 0x?? 0x?? 0x?? 0b???10000 270,549,120 - 3.5e10
+               0x?? 0x?? 0x?? 0x?? 0x?? 0b??100000      3.5e10 - 4.4e12
+          0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0b?1000000      4.4e12 - 5.7e14
+     0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0b10000000      5.7e14 - 7.3e16
+0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0b00000000           0 - 1.8e19
+     \___________________low_u64_________________/
+\______________high_u64_______________/
+```
+
+Trailing zeros as the length indicator has been chosen because:
 - Counting trailing zeros is the most efficient bit count on the x86_64 architecture.
 - It is the second most efficient bit count on Aarch64, needing just one additional instruction.
 - [Assembly instructions for counting bits.](https://stackoverflow.com/a/75335655/129805)
-
-                       Encoding                                 Values
-    
-    b[8] b[7] b[6] b[5] b[4] b[3] b[2] b[1]    b[0]  
-    
-                                            0b???????1           0 - 127
-                                       0x?? 0b??????10         128 - 16,511
-                                  0x?? 0x?? 0b?????100      16,512 - 2,113,663
-                             0x?? 0x?? 0x?? 0b????1000   2,113,663 - 270,549,119
-                        0x?? 0x?? 0x?? 0x?? 0b???10000 270,549,120 - 3.5e10
-                   0x?? 0x?? 0x?? 0x?? 0x?? 0b??100000      3.5e10 - 4.4e12
-              0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0b?1000000      4.4e12 - 5.7e14
-         0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0b10000000      5.7e14 - 7.3e16
-    0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0x?? 0b00000000           0 - 1.8e19
-         \___________________low_u64_________________/
-    \______________high_u64_______________/
-
 
 Decoding:
 - If low_u64.trailing_zeros() > 7, return high_u64.
