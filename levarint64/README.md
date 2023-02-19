@@ -1,4 +1,4 @@
-# LeVarInt
+# LeVarInt64
 
 LeVarInt is a library for encoding and decoding u64s (and i64s) in usually less than eight bytes.
 
