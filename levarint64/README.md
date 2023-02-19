@@ -55,7 +55,7 @@ Notes:
     - a zero value in the high 64 bits would represent OFFSET8 instead being a duplicate zero.
   - Instead, as we know that a u64 cannot exceed 8 bytes:
     - we omit the shifts, and
-    - just stored the eight-byte value verbatim in the high eight bytes.
+    - just store the eight-byte value verbatim in the high eight bytes.
   - A LeVarInt128 would be more complex.
 
 API:
