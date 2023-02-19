@@ -1,6 +1,6 @@
 [package]
 name = "levarint64"
-version = "0.2.0"
+version = "0.2.2"
 edition = "2021"
 authors = ["fadedbee <crates@fadedbee.com>"]
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,7 @@ repository = "https://github.com/fadedbee/codecs/"
 publish = true
 categories = ["embedded", "no-std"]
 keywords = ["varint", "compression"]
-documentation = "https://docs.rs/levarint"
+documentation = "https://docs.rs/levarint64"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
