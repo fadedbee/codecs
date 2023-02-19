@@ -105,8 +105,11 @@ pub fn encode(value: u64, buf: &mut [u8; 9]) -> usize {
             *low64 = [0; size_of::<u64>()];
             drop(low64);
 
-            let high64: &mut [u8; size_of::<u64>()] = &mut buf[0..(size_of::<u64>())].try_into().unwrap();
+            let high64: &mut [u8; size_of::<u64>()] = (&mut buf[1..(size_of::<u64>()+1)]).try_into().unwrap();
             *high64 = u64::to_le_bytes(value);
+            
+            #[cfg(test)] eprintln!("9 value: {value}");
+            #[cfg(test)] eprintln!("9 high64: {high64:?}");
 
             9
         }
@@ -217,5 +220,40 @@ mod tests {
         assert_eq!(buf, [0b00000110u8, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(encode(16_511, &mut buf), 2);
         assert_eq!(buf, [0b11111110u8, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+        assert_eq!(OFFSET2, 16_512);
+        assert_eq!(encode(16_512, &mut buf), 3);
+        assert_eq!(buf, [0b00000100u8, 0x00, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(encode(16_513, &mut buf), 3);
+        assert_eq!(buf, [0b00001100u8, 0x00, 0x00, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(encode(OFFSET3 - 1, &mut buf), 3);
+        assert_eq!(buf, [0b11111100u8, 0xFF, 0xFF, /* ignored */ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+        assert_eq!(OFFSET3, 2_113_664);
+        assert_eq!(OFFSET4, 270_549_120);
+        assert_eq!(OFFSET5, 34_630_287_488);
+        assert_eq!(OFFSET6, 4_432_676_798_592);
+        assert_eq!(encode(OFFSET6, &mut buf), 7);
+        assert_eq!(buf, [0b01000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00, 0x00]);
+        assert_eq!(encode(OFFSET6 + 1, &mut buf), 7);
+        assert_eq!(buf, [0b11000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00, 0x00]);
+        assert_eq!(encode(OFFSET7 - 1, &mut buf), 7);
+        assert_eq!(buf, [0b11000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, /* ignored */ 0x00, 0x00]);
+
+        assert_eq!(OFFSET7, 567_382_630_219_904);
+        assert_eq!(encode(OFFSET7, &mut buf), 8);
+        assert_eq!(buf, [0b10000000u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00]);
+        assert_eq!(encode(OFFSET7 + 1, &mut buf), 8);
+        assert_eq!(buf, [0b10000000u8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ignored */ 0x00]);
+        assert_eq!(encode(OFFSET8 - 1, &mut buf), 8);
+        assert_eq!(buf, [0b10000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, /* ignored */ 0x00]);
+
+        assert_eq!(OFFSET8, 72_624_976_668_147_840);
+        assert_eq!(encode(OFFSET8, &mut buf), 9);
+        assert_eq!(buf, [0b00000000u8, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]);
+        assert_eq!(encode(OFFSET8 + 1, &mut buf), 9);
+        assert_eq!(buf, [0b00000000u8, 0x81, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]);
+        assert_eq!(encode(u64::MAX, &mut buf), 9);
+        assert_eq!(buf, [0b00000000u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
     }
 }

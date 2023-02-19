@@ -40,6 +40,16 @@ Encoding:
 Notes:
 - LeVarInts are inspired by Protobuf's VarInts, but use a little-endian format to allow more efficient processing.
 - Unlike VarInts, LeVarInts use offsets to gain ~1% space efficiency at the cost of one assembly "add/sub  immediate" instruction.
-- Thanks to Masklinn and Chayim Friedman for helping me with https://stackoverflow.com/questions/75370230
-- Thanks to PitaJ for answering https://stackoverflow.com/questions/75496635
+- The nine-byte encoding is a special case.
+  - If the pattern has been followed:
+    - it would use 73 bits (10 bytes) instead of nine, and
+    - a zero value in the high 64 bits would represent OFFSET8 instead being a duplicate zero.
+  - Instead, as we know that a u64 cannot exceed 8 bytes:
+    - we missed off doing the shifts, and
+    - just stored the eight-byte value verbatim in the high eight bytes.
+  - A LeVarInt128 would be more complex.
+
+Thanks:
+- To Masklinn and Chayim Friedman for helping me with https://stackoverflow.com/questions/75370230
+- To PitaJ for answering https://stackoverflow.com/questions/75496635
 
