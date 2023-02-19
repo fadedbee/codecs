@@ -1,8 +1,14 @@
 # LeVarInt64
 
-LeVarInt is a library for encoding and decoding u64s (and i64s) in usually less than eight bytes.
+LeVarInt64 is a library for encoding and decoding u64s (and i64s) in usually fewer than eight bytes.
 
-The encoded format is designed for efficient encoding and decoding on little-endian architectures.
+Typically this is used to serialise a "count" field, when the number of following bytes is unknown at compile-time.
+The count will most often take just one or two bytes to serialise, but u64::MAX will take nine bytes.
+
+The encoded format is designed for efficient encoding and decoding on little-endian architectures:
+- Counting trailing zeros is the most efficient bit count on the x86_64 architecture.
+- It is the second most efficient bit count on Aarch64, needing just one additional instruction.
+- [Assembly instructions for counting bits.](https://stackoverflow.com/a/75335655/129805)
 
                        Encoding                                 Values
     
@@ -45,12 +51,12 @@ Notes:
     - it would use 73 bits (10 bytes) instead of nine, and
     - a zero value in the high 64 bits would represent OFFSET8 instead being a duplicate zero.
   - Instead, as we know that a u64 cannot exceed 8 bytes:
-    - we missed off doing the shifts, and
+    - we omit the shifts, and
     - just stored the eight-byte value verbatim in the high eight bytes.
   - A LeVarInt128 would be more complex.
 
 API:
-- For the first release of the crate, only the very low-level encode_to_array_ref() are provided.
+- For the first release of the crate, only the very low-level encode_u64_to_array_ref() and decode_u64_from_array_ref() are provided.
   - These are most efficient, as bounds checks are optimised away.
   - They are unfriendly.
   - What is a better API?
